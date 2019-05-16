@@ -5,8 +5,6 @@ import re
 from win10toast import ToastNotifier
 from bs4 import BeautifulSoup
 
-
-toaster = ToastNotifier()
 headers = {
         'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/73.0.3683.86 Safari/537.36',
         'pragma': 'no-cache',
@@ -16,17 +14,32 @@ headers = {
         'connection': 'keep-alive',
         'host': 'termmasterschedule.drexel.edu'
         }
-urls = open('links.txt').read().split('\n')
-for url in range(0, len(urls)):
-    if urls[url] == '':
-        urls.pop(url)
 
-while True:
-	time.sleep(int(sys.argv[1]))
-	for i in range(0, len(urls)):
-		response = requests.get(urls[i], headers=headers)
-		if (response.status_code != 200):
-			print("Unable to get data from URL #" + str(i))
+def getURL(class_url):
+	response = requests.get(class_url, headers=headers)
+	if (response.status_code != 200):
+		printToStdOut("Unable to get data from URL #" + str(i))
+	return response
+
+class Notification():
+	toaster = ToastNotifier()
+	message = None
+	def __init__(self, message):
+		self.message = message
+
+	def displayNotification(self):
+		self.toaster.show_toast("Enrollment Checker", self.message, duration=10, threaded=True)
+
+def printToStdOut(message):
+	sys.stdout.write(message)
+	sys.stdout.flush()
+
+def checkClasses(classes, delay):
+	if len(classes) == 0:
+		return
+	time.sleep(delay)
+	for i in range(0, len(classes)):
+		response = getURL(classes[i])
 		soup = BeautifulSoup(response.text, features="html.parser")
 		elements = soup.find_all("td", class_="tableHeader".split())
 		enroll = None
@@ -36,11 +49,23 @@ while True:
 				break
 		if enroll == None:
 			print("Unable to parse data from URL #" + str(i))
-		if enroll == 'CLOSED':
+		elif enroll == 'CLOSED':
 			continue
 		else:
-			toaster.show_toast("Your class has opened up for the URL #" + str(i + 1))
-			sys.stdout.write("Your class has opened up for the url " + str(urls[i]) + "\n")
-			sys.stdout.flush()
-			urls.pop(i)
-			
+			notification = Notification("Your class has opened up for the URL #" + str(i + 1))
+			notification.displayNotification()
+			printToStdOut("Your class has opened up for the url " + str(classes[i]) + "\n")
+			classes.pop(i)
+			print(classes)
+			checkClasses(classes, delay)
+			return
+	checkClasses(classes, delay)
+
+if __name__ == "__main__":
+	urls = open('links.txt').read().split('\n')
+	sleep_time = int(sys.argv[1])
+	for url in range(0, len(urls)):
+		if urls[url] == '':
+			urls.pop(url)
+	checkClasses(urls, sleep_time)
+	printToStdOut("Your classes have all opened up!")
